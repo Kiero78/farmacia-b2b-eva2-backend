@@ -66,8 +66,8 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center gap-2" id="navbar-auth-container">
-                    <!-- Swagger -->
-                    <a href="/api/docs/" class="btn btn-outline-light btn-sm fw-semibold">
+                    <!-- Swagger (Visible exclusivamente para SUPERADMIN) -->
+                    <a href="/api/docs/" class="btn btn-outline-light btn-sm fw-semibold d-none" id="btn-swagger-nav" title="Documentación técnica de la API">
                         <i class="bi bi-code-slash me-1"></i> Swagger API
                     </a>
 
@@ -85,10 +85,16 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const authContainer = document.getElementById('auth-buttons');
+            const btnSwagger = document.getElementById('btn-swagger-nav');
             const token = localStorage.getItem('accessToken');
             const userName = localStorage.getItem('userName');
             const userRol = localStorage.getItem('userRol');
             const tenantNombre = localStorage.getItem('tenantNombre');
+
+            // Mostrar botón de Swagger SOLO si el usuario es SUPERADMIN
+            if (btnSwagger && userRol === 'SUPERADMIN') {
+                btnSwagger.classList.remove('d-none');
+            }
 
             if (token) {
                 // Usuario logueado
