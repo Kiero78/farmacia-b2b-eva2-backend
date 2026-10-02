@@ -23,6 +23,6 @@ class TenantAdmin(admin.ModelAdmin):
 @admin.register(Perfil)
 class PerfilAdmin(admin.ModelAdmin):
     """Configuración admin para el modelo Perfil."""
-    list_display = ('user', 'rol', 'tenant', 'nombre_institucion', 'telefono_contacto')
+    list_display = ('user', 'rol', 'tenant', 'nombre_institucion')
     list_filter = ('rol', 'tenant')
     search_fields = ('user__username', 'nombre_institucion', 'tenant__nombre')
