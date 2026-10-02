@@ -4,7 +4,6 @@
 **Proyecto Asignado:** Proyecto 5: Pedidos de Insumos Médicos y Farmacia (Salud / B2B)  
 **Estudiante:** Vicente Pablo Flores Araneda  
 **Sección:** AP-N4-C1/D  
-**Docente:** Evaluación Académica  
 
 ---
 
