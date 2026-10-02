@@ -16,6 +16,7 @@ from .models import (
     ItemCarro,
     Solicitud,
     ItemSolicitud,
+    RecetaMedica,
 )
 
 
@@ -36,10 +37,11 @@ class CategoriaInsumoAdmin(admin.ModelAdmin):
 class InsumoAdmin(admin.ModelAdmin):
     """Configuración admin para Insumo."""
     list_display = (
-        'nombre_comercial', 'principio_activo', 'categoria',
+        'nombre_comercial', 'principio_activo', 'categoria', 'tenant',
+        'tipo_venta', 'requiere_receta', 'es_medicamento_controlado',
         'lote', 'fecha_vencimiento', 'precio_unitario', 'stock_cajas'
     )
-    list_filter = ('categoria', 'fecha_vencimiento')
+    list_filter = ('tipo_venta', 'requiere_receta', 'es_medicamento_controlado', 'categoria', 'tenant')
     search_fields = ('nombre_comercial', 'principio_activo', 'lote')
 
 
@@ -47,11 +49,6 @@ class InsumoAdmin(admin.ModelAdmin):
 # Inline: ItemCarro (se muestra dentro del admin de Carro)
 # ============================================================================
 class ItemCarroInline(admin.TabularInline):
-    """
-    Inline tabular para mostrar los items dentro del formulario del Carro.
-    Permite agregar/editar items directamente desde la vista del Carro.
-    extra=0: No muestra formularios vacíos extra por defecto.
-    """
     model = ItemCarro
     extra = 0
 
@@ -61,23 +58,23 @@ class ItemCarroInline(admin.TabularInline):
 # ============================================================================
 @admin.register(Carro)
 class CarroAdmin(admin.ModelAdmin):
-    """Configuración admin para Carro con items inline."""
     list_display = ('user', 'estado')
     list_filter = ('estado',)
     inlines = [ItemCarroInline]
 
 
 # ============================================================================
-# Inline: ItemSolicitud (se muestra dentro del admin de Solicitud)
+# Inline: ItemSolicitud y RecetaMedica
 # ============================================================================
 class ItemSolicitudInline(admin.TabularInline):
-    """
-    Inline tabular para mostrar los items dentro del formulario de Solicitud.
-    readonly_fields evita la edición accidental de precios históricos.
-    """
     model = ItemSolicitud
     extra = 0
     readonly_fields = ('precio_unitario_historico',)
+
+
+class RecetaMedicaInline(admin.StackedInline):
+    model = RecetaMedica
+    extra = 0
 
 
 # ============================================================================
@@ -85,9 +82,18 @@ class ItemSolicitudInline(admin.TabularInline):
 # ============================================================================
 @admin.register(Solicitud)
 class SolicitudAdmin(admin.ModelAdmin):
-    """Configuración admin para Solicitud con items inline."""
-    list_display = ('pk', 'user', 'estado', 'total', 'creado_en')
-    list_filter = ('estado', 'creado_en')
-    search_fields = ('user__username',)
-    inlines = [ItemSolicitudInline]
+    list_display = ('pk', 'user', 'tenant', 'estado', 'requiere_receta', 'total', 'creado_en')
+    list_filter = ('estado', 'requiere_receta', 'tenant', 'creado_en')
+    search_fields = ('user__username', 'tenant__nombre')
+    inlines = [ItemSolicitudInline, RecetaMedicaInline]
     readonly_fields = ('creado_en',)
+
+
+# ============================================================================
+# Admin: RecetaMedica
+# ============================================================================
+@admin.register(RecetaMedica)
+class RecetaMedicaAdmin(admin.ModelAdmin):
+    list_display = ('pk', 'solicitud', 'usuario', 'folio_receta', 'medico_prescriptor', 'estado', 'revisado_por', 'fecha_revision')
+    list_filter = ('estado', 'fecha_revision')
+    search_fields = ('folio_receta', 'medico_prescriptor', 'rut_medico', 'usuario__username')
