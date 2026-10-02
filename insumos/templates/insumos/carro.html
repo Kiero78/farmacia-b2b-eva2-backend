@@ -1,0 +1,294 @@
+{% extends 'insumos/base.html' %}
+
+{% block title %}Carro Institucional | CENABAST B2B{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h4 class="fw-bold mb-0 text-dark">Programación de Abastecimiento (Carro de Compras)</h4>
+    <p class="text-muted small">Insumos seleccionados previo a la emisión de la orden formal.</p>
+</div>
+
+<!-- Contenedor donde se renderizará el carrito vía JS -->
+<div id="cart-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Cargando tu carro de compras...</p>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const token = localStorage.getItem('accessToken');
+    const userRol = localStorage.getItem('userRol');
+    const container = document.getElementById('cart-container');
+
+    // 1. Verificar si está logueado
+    if (!token) {
+        container.innerHTML = `
+            <div class="alert alert-warning border shadow-sm text-center py-4">
+                <i class="bi bi-exclamation-circle fs-3 d-block mb-2 text-warning"></i>
+                <h5 class="fw-bold text-dark">Acceso Restringido</h5>
+                <p>Debes iniciar sesión como Institución Médica para ver y gestionar tu carro de compras.</p>
+                <a href="/login/" class="btn btn-primary fw-semibold mt-2">Ir a Iniciar Sesión</a>
+            </div>
+        `;
+        return;
+    }
+
+    // 2. Verificar rol (Los gestores/administradores no tienen carrito)
+    const esCliente = userRol === 'USUARIO' || userRol === 'INSTITUCION';
+    if (!esCliente) {
+        container.innerHTML = `
+            <div class="alert alert-info border shadow-sm text-center py-4">
+                <i class="bi bi-shield-check fs-3 d-block mb-2 text-info"></i>
+                <h5 class="fw-bold text-dark">Vista de Administración</h5>
+                <p>Los administradores y gestores de bodega auditan y gestionan pedidos. Para auditar recetas y pedidos, ve a la sección Solicitudes.</p>
+                <a href="/solicitudes/" class="btn btn-outline-primary btn-sm mt-2">Ir a Solicitudes</a>
+            </div>
+        `;
+        return;
+    }
+
+    // 3. Función para cargar el carrito desde la API
+    async function loadCart() {
+        try {
+            const response = await fetch('/api/carro/', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (response.status === 401) {
+                // Token expirado o inválido
+                localStorage.removeItem('accessToken');
+                window.location.reload();
+                return;
+            }
+
+            if (!response.ok) {
+                throw new Error('Error al cargar el carro');
+            }
+
+            const data = await response.json();
+            renderCart(data);
+
+        } catch (error) {
+            container.innerHTML = `
+                <div class="alert alert-danger border shadow-sm">
+                    No se pudo cargar el carro. Por favor, intenta de nuevo más tarde.
+                </div>
+            `;
+        }
+    }
+
+    // 4. Renderizar el carrito en HTML
+    function renderCart(carro) {
+        // Si el carro no tiene items
+        if (!carro.items || carro.items.length === 0) {
+            container.innerHTML = `
+                <div class="card shadow-sm border text-center py-5">
+                    <div class="card-body">
+                        <i class="bi bi-cart-x text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3 text-dark">Tu carro está vacío</h5>
+                        <p class="text-muted">Aún no has agregado insumos a tu programación de abastecimiento.</p>
+                        <a href="/" class="btn btn-outline-primary mt-2">Ir al Catálogo</a>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Si tiene items, construir las filas de la tabla
+        let itemsHtml = '';
+        carro.items.forEach(item => {
+            itemsHtml += `
+                <tr>
+                    <td class="fw-semibold">
+                        ${item.nombre_insumo}
+                        ${item.requiere_receta ? `<div><span class="badge bg-warning-subtle text-warning-emphasis border border-warning" style="font-size: 0.72rem;"><i class="bi bi-file-earmark-medical me-1"></i>Requiere Receta Médica</span></div>` : ''}
+                    </td>
+                    <td class="text-center">${item.cantidad_cajas} cajas</td>
+                    <td class="text-end">$${item.precio_unitario_insumo}</td>
+                    <td class="text-end fw-bold text-primary">$${item.subtotal}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-danger btn-delete-item" data-id="${item.id}" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        // Formulario de receta médica si aplica
+        const recetaFormHtml = carro.requiere_receta ? `
+            <div class="alert alert-warning border-warning m-3 mb-0">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <i class="bi bi-shield-exclamation fs-4 text-warning-emphasis"></i>
+                    <h6 class="mb-0 fw-bold text-dark">Insumos con Venta Bajo Receta Médica</h6>
+                </div>
+                <p class="small mb-3 text-secondary">
+                    Su carro incluye insumos que requieren prescripción médica obligatoria según la regulación sanitaria.
+                    La orden pasará a <strong>EN REVISIÓN DE RECETA</strong> y el stock será rebajado una vez aprobada por el farmacéutico / administrador.
+                </p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold text-secondary">Folio de Receta Médica <span class="text-danger">*</span></label>
+                        <input type="text" id="input-folio" class="form-control form-control-sm" placeholder="Ej: REC-2026-081" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold text-secondary">Médico Prescriptor <span class="text-danger">*</span></label>
+                        <input type="text" id="input-medico" class="form-control form-control-sm" placeholder="Ej: Dr. Matías Valenzuela" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold text-secondary">RUT Médico Prescriptor</label>
+                        <input type="text" id="input-rut-medico" class="form-control form-control-sm" placeholder="Ej: 15.678.901-2">
+                    </div>
+                    <div class="col-12 mt-2">
+                        <label class="form-label small fw-semibold text-secondary">Diagnóstico / Justificación Clínica</label>
+                        <input type="text" id="input-diagnostico" class="form-control form-control-sm" placeholder="Ej: Tratamiento antibiótico para neumonía intrahospitalaria">
+                    </div>
+                </div>
+            </div>
+        ` : '';
+
+        // Construir la tabla completa
+        container.innerHTML = `
+            <div class="card shadow-sm mb-4 border">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-dark"><i class="bi bi-building me-1"></i> Tu Carro Institucional</h6>
+                        <small class="text-muted">Carro ID #${carro.id} &bull; Estado: <span class="badge bg-success">${carro.estado}</span></small>
+                    </div>
+                    <span class="badge bg-light text-dark border">${carro.items.length} insumos</span>
+                </div>
+                ${recetaFormHtml}
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Insumo</th>
+                                <th class="text-center">Cantidad</th>
+                                <th class="text-end">Precio Unit.</th>
+                                <th class="text-end">Subtotal</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">TOTAL ESTIMADO:</td>
+                                <td class="text-end fw-bold text-primary fs-5">$${carro.total_estimado}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div class="card-footer bg-white d-flex justify-content-end gap-2 py-3">
+                    <button class="btn btn-outline-danger btn-empty-cart">Vaciar Carro</button>
+                    <button class="btn btn-success btn-checkout"><i class="bi bi-check-circle me-1"></i> Confirmar Solicitud</button>
+                </div>
+            </div>
+        `;
+
+        // 5. Añadir eventos a los botones de eliminar item
+        document.querySelectorAll('.btn-delete-item').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                if(confirm("¿Seguro que deseas eliminar este insumo del carro?")) {
+                    const itemId = this.dataset.id;
+                    await fetch('/api/carro/items/' + itemId + '/', {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    loadCart();
+                }
+            });
+        });
+
+        // 6. Añadir evento al botón vaciar carro
+        document.querySelector('.btn-empty-cart').addEventListener('click', async function() {
+            if(confirm("¿Estás seguro de vaciar todo el carro?")) {
+                await fetch('/api/carro/', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                loadCart();
+            }
+        });
+
+        // 7. Añadir evento al botón de confirmar (checkout)
+        document.querySelector('.btn-checkout').addEventListener('click', async function() {
+            let recetaPayload = null;
+            if (carro.requiere_receta) {
+                const folio = document.getElementById('input-folio')?.value.trim();
+                const medico = document.getElementById('input-medico')?.value.trim();
+                const rut = document.getElementById('input-rut-medico')?.value.trim();
+                const diagnostico = document.getElementById('input-diagnostico')?.value.trim();
+
+                if (!folio || !medico) {
+                    alert("Para comprar medicamentos bajo receta médica, debe ingresar al menos el Folio de Receta y el Médico Prescriptor.");
+                    return;
+                }
+
+                recetaPayload = {
+                    folio_receta: folio,
+                    medico_prescriptor: medico,
+                    rut_medico: rut || 'N/A',
+                    diagnostico: diagnostico || ''
+                };
+            }
+
+            if(confirm("¿Generar solicitud formal de pedido? Esto vaciará tu carro y generará la Solicitud.")) {
+                const btn = this;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+                
+                try {
+                    const response = await fetch('/api/solicitudes/confirmar/', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token 
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const solData = await response.json();
+                        
+                        // Si requería receta y completó datos de prescripción, asociarlos
+                        if (recetaPayload && solData.id) {
+                            try {
+                                await fetch(`/api/solicitudes/${solData.id}/subir-receta/`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': 'Bearer ' + token
+                                    },
+                                    body: JSON.stringify(recetaPayload)
+                                });
+                            } catch (_) { /* Continuar a solicitudes */ }
+                        }
+
+                        // Redirigir a solicitudes al terminar
+                        window.location.href = '/solicitudes/';
+                    } else {
+                        const err = await response.json();
+                        alert('Error: ' + (err.detalle || 'No se pudo procesar la solicitud.'));
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Confirmar Solicitud';
+                    }
+                } catch(e) {
+                    alert('Error de conexión al servidor.');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-check-circle me-1"></i> Confirmar Solicitud';
+                }
+            }
+        });
+    }
+
+    // Iniciar carga
+    loadCart();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,213 @@
+{% extends 'insumos/base.html' %}
+
+{% block title %}Acceso Institucional | CENABAST B2B{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-12 col-sm-10 col-md-7 col-lg-5 col-xl-4">
+
+        <!-- Cabecera institucional -->
+        <div class="text-center mb-4">
+            <div class="mb-3">
+                <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
+            </div>
+            <h1 class="h4 fw-bold text-dark mb-1">Acceso Institucional</h1>
+            <p class="text-muted small">
+                Red de Abastecimiento Clínico CENABAST &mdash; Área B2B
+            </p>
+        </div>
+
+        <!-- Tarjeta de login -->
+        <div class="card border shadow-sm">
+            <div class="card-body p-4">
+
+                <!-- Alerta de error (oculta por defecto) -->
+                <div id="alerta-error" class="alert alert-danger d-flex align-items-center gap-2 d-none" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+                    <span id="alerta-error-msg">Credenciales incorrectas. Verifique su usuario y contraseña.</span>
+                </div>
+
+                <!-- Formulario -->
+                <form id="form-login" novalidate>
+
+                    <div class="mb-3">
+                        <label for="login-username" class="form-label fw-semibold small text-secondary text-uppercase">
+                            Nombre de Usuario
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0">
+                                <i class="bi bi-person text-muted"></i>
+                            </span>
+                            <input
+                                type="text"
+                                id="login-username"
+                                name="username"
+                                class="form-control border-start-0 ps-0"
+                                placeholder="ej: hospital_uc"
+                                autocomplete="username"
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="login-password" class="form-label fw-semibold small text-secondary text-uppercase">
+                            Contraseña
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0">
+                                <i class="bi bi-lock text-muted"></i>
+                            </span>
+                            <input
+                                type="password"
+                                id="login-password"
+                                name="password"
+                                class="form-control border-start-0 ps-0"
+                                placeholder="••••••••"
+                                autocomplete="current-password"
+                                required
+                            >
+                            <button
+                                class="btn btn-outline-secondary border-start-0"
+                                type="button"
+                                id="toggle-password"
+                                title="Mostrar / ocultar contraseña"
+                                tabindex="-1"
+                            >
+                                <i class="bi bi-eye" id="toggle-password-icon"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" id="btn-ingresar" class="btn btn-primary fw-semibold py-2">
+                            <span id="btn-texto">
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Ingresar al Portal
+                            </span>
+                            <span id="btn-spinner" class="d-none">
+                                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                Verificando...
+                            </span>
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+
+        <!-- Nota institucional -->
+        <p class="text-center text-muted small mt-3">
+            <i class="bi bi-info-circle me-1"></i>
+            Solo establecimientos de salud autorizados por CENABAST.
+        </p>
+
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const form          = document.getElementById('form-login');
+    const alertaError   = document.getElementById('alerta-error');
+    const alertaMsg     = document.getElementById('alerta-error-msg');
+    const btnIngresar   = document.getElementById('btn-ingresar');
+    const btnTexto      = document.getElementById('btn-texto');
+    const btnSpinner    = document.getElementById('btn-spinner');
+    const toggleBtn     = document.getElementById('toggle-password');
+    const passwordInput = document.getElementById('login-password');
+    const toggleIcon    = document.getElementById('toggle-password-icon');
+
+    // ── Mostrar/ocultar contraseña ────────────────────────────────────────────
+    toggleBtn.addEventListener('click', function () {
+        const esPassword = passwordInput.type === 'password';
+        passwordInput.type = esPassword ? 'text' : 'password';
+        toggleIcon.classList.toggle('bi-eye', !esPassword);
+        toggleIcon.classList.toggle('bi-eye-slash', esPassword);
+    });
+
+    // ── Helpers de UI ─────────────────────────────────────────────────────────
+    function setLoading(loading) {
+        btnIngresar.disabled = loading;
+        btnTexto.classList.toggle('d-none', loading);
+        btnSpinner.classList.toggle('d-none', !loading);
+    }
+
+    function mostrarError(msg) {
+        alertaMsg.textContent = msg || 'Credenciales incorrectas. Verifique su usuario y contraseña.';
+        alertaError.classList.remove('d-none');
+    }
+
+    function ocultarError() {
+        alertaError.classList.add('d-none');
+    }
+
+    // ── Submit del formulario ─────────────────────────────────────────────────
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        ocultarError();
+
+        const username = document.getElementById('login-username').value.trim();
+        const password = passwordInput.value;
+
+        if (!username || !password) {
+            mostrarError('Por favor complete todos los campos.');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const response = await fetch('/api/token/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // ── Éxito: guardar tokens y redirigir al catálogo ──────────
+                localStorage.setItem('accessToken', data.access);
+                localStorage.setItem('refreshToken', data.refresh);
+                localStorage.setItem('userName', data.username || username);
+                localStorage.setItem('userRol', data.rol || '');
+                if (data.tenant_nombre) localStorage.setItem('tenantNombre', data.tenant_nombre);
+                if (data.tenant_codigo) localStorage.setItem('tenantCodigo', data.tenant_codigo);
+
+                // Decodificar payload del JWT de respaldo
+                try {
+                    const payload = JSON.parse(atob(data.access.split('.')[1]));
+                    if (!data.rol && payload.rol) localStorage.setItem('userRol', payload.rol);
+                    if (!data.username && payload.username) localStorage.setItem('userName', payload.username);
+                    if (!data.tenant_nombre && payload.tenant_nombre) localStorage.setItem('tenantNombre', payload.tenant_nombre);
+                } catch (_) { /* Si no se puede decodificar, continuar igual */ }
+
+                window.location.href = '/';
+
+            } else {
+                // ── Error de autenticación ─────────────────────────────────
+                if (response.status === 401) {
+                    mostrarError('Credenciales incorrectas. Verifique su usuario y contraseña.');
+                } else if (data.detail) {
+                    mostrarError(data.detail);
+                } else {
+                    mostrarError('Error al conectar con el servidor. Intente nuevamente.');
+                }
+                setLoading(false);
+            }
+
+        } catch (error) {
+            // ── Error de red ───────────────────────────────────────────────
+            mostrarError('No se pudo conectar con el servidor. Verifique su conexión.');
+            setLoading(false);
+        }
+    });
+
+    // ── Limpiar error al escribir ─────────────────────────────────────────────
+    document.getElementById('login-username').addEventListener('input', ocultarError);
+    passwordInput.addEventListener('input', ocultarError);
+
+})();
+</script>
+{% endblock %}

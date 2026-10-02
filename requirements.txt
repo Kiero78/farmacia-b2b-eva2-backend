@@ -1,0 +1,72 @@
+# ============================================================================
+# REQUIREMENTS.TXT - Dependencias del proyecto farmacia_b2b
+# ============================================================================
+# Este archivo lista todas las dependencias necesarias para ejecutar el
+# proyecto Django "Pedidos de Insumos Médicos y Farmacia (Salud / B2B)".
+#
+# Para instalar todas las dependencias, ejecutar:
+#   pip install -r requirements.txt
+#
+# Compatibilidad: Python 3.11+
+# ============================================================================
+
+# --------------------------------------------------------------------------
+# Framework principal
+# --------------------------------------------------------------------------
+# Django: Framework web de alto nivel que fomenta el desarrollo rápido y
+# el diseño limpio y pragmático. Versión 5.x para aprovechar las últimas
+# mejoras en ORM, validaciones y seguridad.
+Django>=5.0,<6.0
+
+# --------------------------------------------------------------------------
+# Django REST Framework (DRF)
+# --------------------------------------------------------------------------
+# Toolkit potente y flexible para construir APIs RESTful sobre Django.
+# Proporciona serializadores, vistas genéricas, autenticación, permisos,
+# paginación, filtrado y documentación automática.
+djangorestframework>=3.15,<4.0
+
+# --------------------------------------------------------------------------
+# Adaptador PostgreSQL
+# --------------------------------------------------------------------------
+# psycopg2-binary: Driver de PostgreSQL para Python. La versión "binary"
+# incluye las librerías de PostgreSQL precompiladas, evitando la necesidad
+# de instalar libpq-dev en el sistema operativo.
+# PostgreSQL es la base de datos elegida por su robustez, soporte de
+# transacciones ACID y tipos de datos avanzados (JSONB, arrays, etc.).
+psycopg2-binary>=2.9,<3.0
+
+# --------------------------------------------------------------------------
+# Gestión de variables de entorno
+# --------------------------------------------------------------------------
+# python-decouple: Permite separar la configuración sensible (credenciales
+# de base de datos, SECRET_KEY, DEBUG) del código fuente. Lee variables
+# desde archivos .env o variables de entorno del sistema operativo.
+# Esto sigue el principio de los 12 factores (12-Factor App).
+python-decouple>=3.8,<4.0
+
+# --------------------------------------------------------------------------
+# Autenticación JWT
+# --------------------------------------------------------------------------
+# djangorestframework-simplejwt: Proporciona autenticación basada en
+# JSON Web Tokens (JWT) para DRF. Genera pares de tokens (access/refresh)
+# que permiten autenticación stateless, ideal para APIs REST consumidas
+# por frontends SPA o aplicaciones móviles.
+djangorestframework-simplejwt>=5.3,<6.0
+
+# --------------------------------------------------------------------------
+# Filtrado avanzado
+# --------------------------------------------------------------------------
+# django-filter: Integración con DRF para filtrado declarativo de querysets.
+# Permite a los clientes de la API filtrar resultados por campos específicos
+# usando parámetros de query string (ej: ?categoria=1&stock_min=10).
+django-filter>=24.0,<25.0
+
+# --------------------------------------------------------------------------
+# Documentación OpenAPI / Swagger
+# --------------------------------------------------------------------------
+# drf-spectacular: Generador de esquemas OpenAPI 3.0 para DRF.
+# Produce documentación interactiva (Swagger UI / ReDoc) automáticamente
+# a partir de los serializadores, vistas y configuraciones del proyecto.
+# Reemplaza a drf-yasg con mejor soporte de OpenAPI 3.0.
+drf-spectacular>=0.27,<1.0

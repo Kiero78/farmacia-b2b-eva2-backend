@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CENABAST B2B | Abastecimiento Clínico{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        :root {
+            --azul-cenabast: #003b71;
+            --rojo-chile: #eb3c46;
+            --celeste-cenabast: #0080c8;
+        }
+
+        .navbar-cenabast {
+            background-color: var(--azul-cenabast);
+            border-bottom: 4px solid var(--rojo-chile);
+        }
+
+        .nav-link.active {
+            font-weight: 700;
+            color: #ffffff !important;
+            border-bottom: 2px solid #ffffff;
+        }
+
+        .badge-institucional {
+            background-color: #e9ecef;
+            color: var(--azul-cenabast);
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body class="bg-light d-flex flex-column min-vh-100">
+
+    <!-- Navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-cenabast sticky-top shadow-sm py-2">
+        <div class="container">
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+                <i class="bi bi-hospital fs-4"></i>
+                <span>CENABAST <small class="fw-light fs-6 text-white-50">| Sistema B2B</small></span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navMenu">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-3">
+                    <li class="nav-item">
+                        <a class="nav-link text-white-50 {% if request.path == '/' %}active{% endif %}" href="/">
+                            <i class="bi bi-boxes me-1"></i> Catálogo
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white-50 {% if request.path == '/carro/' %}active{% endif %}"
+                            href="/carro/">
+                            <i class="bi bi-cart3 me-1"></i> Carro Institucional
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-white-50 {% if request.path == '/solicitudes/' %}active{% endif %}"
+                            href="/solicitudes/">
+                            <i class="bi bi-receipt me-1"></i> Solicitudes y Despachos
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-items-center gap-2" id="navbar-auth-container">
+                    <!-- Swagger -->
+                    <a href="/api/docs/" class="btn btn-outline-light btn-sm fw-semibold">
+                        <i class="bi bi-code-slash me-1"></i> Swagger API
+                    </a>
+
+                    <!-- Estado de Autenticación (Se llena con JS) -->
+                    <div id="auth-buttons" class="ms-2 d-flex align-items-center gap-2">
+                        <!-- Spinner mientras carga el estado -->
+                        <div class="spinner-border spinner-border-sm text-light" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Script de Autenticación Global -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const authContainer = document.getElementById('auth-buttons');
+            const token = localStorage.getItem('accessToken');
+            const userName = localStorage.getItem('userName');
+            const userRol = localStorage.getItem('userRol');
+            const tenantNombre = localStorage.getItem('tenantNombre');
+
+            if (token) {
+                // Usuario logueado
+                authContainer.innerHTML = `
+                <span class="text-light small me-2 d-flex align-items-center gap-1">
+                    <i class="bi bi-person-circle"></i> <span>${userName}</span>
+                    <span class="badge bg-light text-dark">${userRol}</span>
+                    ${tenantNombre ? `<span class="badge bg-warning-subtle text-dark border border-warning" title="Tenant Activo"><i class="bi bi-building me-1"></i>${tenantNombre}</span>` : ''}
+                </span>
+                <button id="btn-logout" class="btn btn-danger btn-sm fw-semibold">
+                    <i class="bi bi-box-arrow-right"></i> Salir
+                </button>
+            `;
+
+                document.getElementById('btn-logout').addEventListener('click', function () {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    localStorage.removeItem('userName');
+                    localStorage.removeItem('userRol');
+                    localStorage.removeItem('tenantNombre');
+                    localStorage.removeItem('tenantCodigo');
+                    window.location.href = '/login/';
+                });
+            } else {
+                // Usuario no logueado
+                authContainer.innerHTML = `
+                <a href="/login/" class="btn btn-primary btn-sm fw-semibold border-light">
+                    <i class="bi bi-box-arrow-in-right"></i> Iniciar Sesión
+                </a>
+            `;
+            }
+        });
+    </script>
+
+    <!-- Ficha de evaluación -->
+    <div class="bg-white border-bottom py-2">
+        <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2 small text-muted">
+            <div>
+                <strong>Vicente Pablo Flores Araneda</strong> | AP-N4-C1/D | EVA-2 (2026)
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-info-subtle text-info border border-info">
+                    <i class="bi bi-diagram-3-fill me-1"></i> Multi-Tenant RBAC
+                </span>
+                <span class="badge bg-success-subtle text-success border border-success">
+                    <i class="bi bi-check-circle-fill me-1"></i> PostgreSQL Conectada
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido principal -->
+    <main class="container my-4 flex-grow-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-white border-top py-3 text-center text-muted small mt-auto">
+        <div class="container">
+            <div>Plataforma Institucional de Abastecimiento B2B — Red de Salud CENABAST</div>
+            <div class="mt-1 text-dark">
+                <strong>Estudiante:</strong> Vicente Pablo Flores Araneda &nbsp;|&nbsp; 
+                <strong>Sección:</strong> AP-N4-C1/D &nbsp;|&nbsp; 
+                <strong>Año:</strong> 2026 &nbsp;|&nbsp;
+                <strong>Proyecto 5:</strong> Pedidos de Insumos Médicos y Farmacia (Salud / B2B)
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

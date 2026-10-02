@@ -1,0 +1,35 @@
+# ============================================================================
+# .gitignore - Archivos excluidos del control de versiones
+# ============================================================================
+
+# Variables de entorno (credenciales sensibles)
+.env
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entorno virtual
+venv/
+env/
+.venv/
+
+# Base de datos SQLite (desarrollo)
+db.sqlite3
+
+# Archivos estáticos recolectados
+staticfiles/
+
+# Archivos multimedia subidos por usuarios
+media/
+*.pdf
+*.jpg
+*.jpeg
+*.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

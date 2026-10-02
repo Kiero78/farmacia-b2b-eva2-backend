@@ -1,0 +1,457 @@
+{% extends 'insumos/base.html' %}
+
+{% block title %}Solicitudes y Despachos | CENABAST B2B{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Trazabilidad de Solicitudes y Despachos</h4>
+        <p class="text-muted small mb-0">Gestión de órdenes clínicas, auditoría médica de recetas y control de stock.</p>
+    </div>
+    <button id="btn-refrescar" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i> Refrescar
+    </button>
+</div>
+
+<!-- Contenedor dinámico -->
+<div id="solicitudes-container">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Cargando trazabilidad de órdenes...</p>
+    </div>
+</div>
+
+<!-- Modal para Auditar Receta Médica -->
+<div class="modal fade" id="modalAuditarReceta" tabindex="-1" aria-labelledby="modalAuditarRecetaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title fw-bold" id="modalAuditarRecetaLabel">
+                    <i class="bi bi-shield-check text-warning me-2"></i>Auditoría Farmacéutica de Receta Médica
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-4" id="modal-auditar-body">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-danger" id="btn-denegar-receta">
+                    <i class="bi bi-x-circle me-1"></i> Denegar Compra
+                </button>
+                <button type="button" class="btn btn-success" id="btn-aprobar-receta">
+                    <i class="bi bi-check-circle me-1"></i> Aprobar Venta y Descontar Stock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const token = localStorage.getItem('accessToken');
+    const userRol = localStorage.getItem('userRol');
+    const container = document.getElementById('solicitudes-container');
+    const btnRefrescar = document.getElementById('btn-refrescar');
+
+    const modalEl = document.getElementById('modalAuditarReceta');
+    let modalInstance = null;
+    if (window.bootstrap) {
+        modalInstance = new bootstrap.Modal(modalEl);
+    }
+
+    let currentAuditarSolId = null;
+
+    if (btnRefrescar) {
+        btnRefrescar.addEventListener('click', loadSolicitudes);
+    }
+
+    // 1. Verificar si está logueado
+    if (!token) {
+        container.innerHTML = `
+            <div class="alert alert-warning border shadow-sm text-center py-4">
+                <i class="bi bi-exclamation-circle fs-3 d-block mb-2 text-warning"></i>
+                <h5 class="fw-bold text-dark">Acceso Restringido</h5>
+                <p>Debes iniciar sesión para ver el registro de solicitudes y despachos.</p>
+                <a href="/login/" class="btn btn-primary fw-semibold mt-2">Ir a Iniciar Sesión</a>
+            </div>
+        `;
+        return;
+    }
+
+    const isGestor = userRol === 'SUPERADMIN' || userRol === 'ADMIN_PAGINA' || userRol === 'GESTOR';
+
+    // 2. Cargar las solicitudes desde la API
+    async function loadSolicitudes() {
+        try {
+            const response = await fetch('/api/solicitudes/', {
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (response.status === 401) {
+                localStorage.removeItem('accessToken');
+                window.location.reload();
+                return;
+            }
+
+            if (!response.ok) throw new Error('Error de red');
+
+            const data = await response.json();
+            renderTable(data);
+        } catch (error) {
+            container.innerHTML = `
+                <div class="alert alert-danger border shadow-sm">
+                    No se pudieron cargar las solicitudes. Verifica tu conexión.
+                </div>
+            `;
+        }
+    }
+
+    // Función auxiliar para colorear badges según estado
+    function getEstadoBadge(sol) {
+        const estado = sol.estado;
+        switch(estado) {
+            case 'PENDIENTE': 
+                return `<span class="badge bg-warning text-dark"><i class="bi bi-clock-history me-1"></i> Pendiente</span>`;
+            case 'EN_REVISION': 
+                return `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning"><i class="bi bi-file-earmark-medical me-1"></i> En Revisión Receta</span>`;
+            case 'PAGADO': 
+                return `<span class="badge bg-primary"><i class="bi bi-credit-card me-1"></i> Aprobado / Pagado</span>`;
+            case 'ENTREGADO': 
+                return `<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i> Entregado</span>`;
+            case 'CANCELADO': 
+                return `<span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i> Cancelado</span>`;
+            default: 
+                return `<span class="badge bg-secondary">${estado}</span>`;
+        }
+    }
+
+    // 3. Renderizar la tabla de solicitudes
+    function renderTable(solicitudes) {
+        if (!solicitudes || solicitudes.length === 0) {
+            container.innerHTML = `
+                <div class="card shadow-sm border">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-receipt text-muted" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3 text-muted">No se registran solicitudes</h5>
+                        <p class="text-muted small">Aún no hay órdenes de compra en el sistema.</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        let filasHtml = '';
+
+        solicitudes.forEach(sol => {
+            const fecha = new Date(sol.creado_en).toLocaleString('es-CL');
+            
+            // Acciones administrativas
+            let accionesHtml = '';
+            if (isGestor) {
+                if (sol.estado === 'EN_REVISION') {
+                    accionesHtml = `
+                        <button class="btn btn-warning btn-sm fw-bold text-dark btn-abrir-auditoria" data-id="${sol.id}">
+                            <i class="bi bi-shield-check me-1"></i> Auditar Receta
+                        </button>
+                    `;
+                } else if (sol.estado === 'PENDIENTE') {
+                    accionesHtml = `
+                        <div class="input-group input-group-sm">
+                            <select class="form-select select-estado" data-id="${sol.id}">
+                                <option value="" disabled selected>Cambiar a...</option>
+                                <option value="PAGADO">Aprobar Pago</option>
+                                <option value="CANCELADO" class="text-danger">Cancelar Orden</option>
+                            </select>
+                            <button class="btn btn-outline-secondary btn-cambiar-estado" type="button" data-id="${sol.id}">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </div>
+                    `;
+                } else if (sol.estado === 'PAGADO') {
+                    accionesHtml = `
+                        <div class="input-group input-group-sm">
+                            <select class="form-select select-estado" data-id="${sol.id}">
+                                <option value="" disabled selected>Cambiar a...</option>
+                                <option value="ENTREGADO">Marcar Entregado</option>
+                                <option value="CANCELADO" class="text-danger">Cancelar (Repone Stock)</option>
+                            </select>
+                            <button class="btn btn-outline-secondary btn-cambiar-estado" type="button" data-id="${sol.id}">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    accionesHtml = `<span class="text-muted small"><i class="bi bi-lock-fill"></i> Flujo cerrado</span>`;
+                }
+            } else {
+                // Vista de cliente
+                if (sol.estado === 'EN_REVISION') {
+                    accionesHtml = `<span class="text-muted small"><i class="bi bi-hourglass-split"></i> Esperando validación médica</span>`;
+                } else if (sol.estado === 'CANCELADO' && sol.motivo_cancelacion) {
+                    accionesHtml = `<span class="text-danger small"><i class="bi bi-info-circle me-1"></i>${sol.motivo_cancelacion}</span>`;
+                } else {
+                    accionesHtml = `<span class="text-muted small">-</span>`;
+                }
+            }
+
+            const tenantBadge = sol.tenant_nombre ? 
+                `<span class="badge bg-light text-dark border ms-1" title="Tenant"><i class="bi bi-building"></i> ${sol.tenant_nombre}</span>` : '';
+
+            filasHtml += `
+                <tr>
+                    <td class="fw-bold font-monospace">#SOL-${String(sol.id).padStart(4, '0')}</td>
+                    <td>
+                        <span class="fw-semibold">${sol.usuario}</span>
+                        ${tenantBadge}
+                    </td>
+                    <td>${fecha}</td>
+                    <td class="fw-bold text-primary">$${sol.total}</td>
+                    <td>
+                        ${getEstadoBadge(sol)}
+                        ${sol.requiere_receta ? `<div class="mt-1"><span class="badge bg-danger-subtle text-danger border border-danger" style="font-size:0.7rem;"><i class="bi bi-prescription2 me-1"></i>Receta Médica</span></div>` : ''}
+                    </td>
+                    <td>${accionesHtml}</td>
+                </tr>
+            `;
+        });
+
+        container.innerHTML = `
+            <div class="card shadow-sm border">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>N° Solicitud</th>
+                                <th>Institución / Usuario</th>
+                                <th>Fecha Emisión</th>
+                                <th>Total Orden</th>
+                                <th>Estado</th>
+                                <th>${isGestor ? 'Gestión y Auditoría' : 'Detalle'}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filasHtml}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+
+        // 4. Conectar botones de auditar receta
+        document.querySelectorAll('.btn-abrir-auditoria').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const solId = this.dataset.id;
+                currentAuditarSolId = solId;
+                abrirModalAuditoria(solId);
+            });
+        });
+
+        // 5. Conectar selectores de cambio de estado estándar
+        document.querySelectorAll('.btn-cambiar-estado').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const solId = this.dataset.id;
+                const select = document.querySelector(`.select-estado[data-id="${solId}"]`);
+                const nuevoEstado = select.value;
+
+                if (!nuevoEstado) {
+                    alert("Por favor selecciona un estado al cual cambiar.");
+                    return;
+                }
+
+                if (confirm(`¿Estás seguro de cambiar la solicitud #${solId} a estado ${nuevoEstado}?`)) {
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                    try {
+                        const response = await fetch(`/api/solicitudes/${solId}/estado/`, {
+                            method: 'PATCH',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': 'Bearer ' + token
+                            },
+                            body: JSON.stringify({ estado: nuevoEstado })
+                        });
+
+                        if (response.ok) {
+                            loadSolicitudes();
+                        } else {
+                            const err = await response.json();
+                            alert('Error: ' + (err.detalle || 'Transición de estado inválida'));
+                            this.disabled = false;
+                            this.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                        }
+                    } catch(e) {
+                        alert('Error de conexión');
+                        this.disabled = false;
+                        this.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+                    }
+                }
+            });
+        });
+    }
+
+    // 6. Abrir y llenar Modal de Auditoría
+    async function abrirModalAuditoria(solId) {
+        const bodyEl = document.getElementById('modal-auditar-body');
+        bodyEl.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Cargando datos de la receta médica...</p>
+            </div>
+        `;
+        if (modalInstance) modalInstance.show();
+
+        try {
+            const response = await fetch(`/api/solicitudes/${solId}/`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+
+            if (!response.ok) throw new Error('Error al cargar solicitud');
+            const sol = await response.json();
+
+            let itemsHtml = '';
+            (sol.items || []).forEach(it => {
+                itemsHtml += `
+                    <tr>
+                        <td>${it.nombre_insumo}</td>
+                        <td class="text-center">${it.cantidad_cajas} cajas</td>
+                        <td class="text-end">$${it.precio_unitario_historico}</td>
+                        <td class="text-end fw-bold">$${it.subtotal}</td>
+                    </tr>
+                `;
+            });
+
+            const receta = (sol.recetas && sol.recetas.length > 0) ? sol.recetas[0] : null;
+
+            bodyEl.innerHTML = `
+                <div class="alert alert-info py-2 d-flex align-items-center gap-2 mb-3">
+                    <i class="bi bi-info-circle-fill fs-5"></i>
+                    <div>
+                        <strong>Solicitud #SOL-${String(sol.id).padStart(4, '0')}</strong> &mdash; 
+                        Usuario: <strong>${sol.usuario}</strong> &mdash; Total: <strong>$${sol.total}</strong>
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-dark border-bottom pb-1 mb-2">
+                    <i class="bi bi-file-medical text-danger me-1"></i> Datos de la Prescripción Médica
+                </h6>
+                <div class="card bg-light border p-3 mb-3">
+                    <div class="row g-2 small">
+                        <div class="col-sm-6">
+                            <strong>Folio Receta:</strong> <span class="font-monospace">${receta ? (receta.folio_receta || 'Sin folio') : 'No adjunto'}</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <strong>Médico Prescriptor:</strong> <span>${receta ? (receta.medico_prescriptor || 'No especificado') : 'N/A'}</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <strong>RUT Médico:</strong> <span>${receta ? (receta.rut_medico || 'No especificado') : 'N/A'}</span>
+                        </div>
+                        <div class="col-sm-6">
+                            <strong>Institución Emisora:</strong> <span>${receta ? (receta.institucion_salud || 'No especificada') : 'N/A'}</span>
+                        </div>
+                        <div class="col-12 mt-1">
+                            <strong>Diagnóstico / Justificación:</strong> 
+                            <p class="mb-0 text-secondary">${receta ? (receta.diagnostico || 'Sin diagnóstico registrado') : 'N/A'}</p>
+                        </div>
+                        ${receta && receta.archivo_receta ? `
+                        <div class="col-12 mt-2">
+                            <strong>Archivo Digital:</strong> 
+                            <a href="${receta.archivo_receta}" target="_blank" class="btn btn-sm btn-outline-primary ms-2">
+                                <i class="bi bi-file-earmark-arrow-down me-1"></i> Ver Receta Médica Adjunta
+                            </a>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <h6 class="fw-bold text-dark border-bottom pb-1 mb-2">
+                    <i class="bi bi-boxes text-primary me-1"></i> Fármacos e Insumos en la Orden
+                </h6>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Insumo</th>
+                                <th class="text-center">Cantidad</th>
+                                <th class="text-end">Precio Unit.</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mb-2">
+                    <label for="auditoria-observaciones" class="form-label fw-bold small text-secondary">
+                        Observaciones Farmacéuticas (Opcional):
+                    </label>
+                    <textarea id="auditoria-observaciones" class="form-control form-control-sm" rows="2" placeholder="Ingrese justificación clínica o motivo de rechazo..."></textarea>
+                </div>
+            `;
+        } catch (e) {
+            bodyEl.innerHTML = `<div class="alert alert-danger">Error al cargar la información de la solicitud.</div>`;
+        }
+    }
+
+    // 7. Enviar decisión de auditoría (APROBAR o DENEGAR)
+    async function enviarDecisionAuditoria(decision) {
+        if (!currentAuditarSolId) return;
+
+        const obsEl = document.getElementById('auditoria-observaciones');
+        const observaciones = obsEl ? obsEl.value.trim() : '';
+
+        const mensajeConfirm = decision === 'APROBAR' 
+            ? "¿Confirmar APROBACIÓN de la venta? El stock se descontará de manera inmediata y la orden quedará como PAGADA."
+            : "¿Confirmar DENEGACIÓN de la compra? La orden quedará CANCELADA y el stock NO será descontado.";
+
+        if (!confirm(mensajeConfirm)) return;
+
+        const btnAprobar = document.getElementById('btn-aprobar-receta');
+        const btnDenegar = document.getElementById('btn-denegar-receta');
+        btnAprobar.disabled = true;
+        btnDenegar.disabled = true;
+
+        try {
+            const response = await fetch(`/api/solicitudes/${currentAuditarSolId}/revisar-receta/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    decision: decision,
+                    observaciones: observaciones
+                })
+            });
+
+            if (response.ok) {
+                if (modalInstance) modalInstance.hide();
+                alert(`Operación exitosa: Compra ${decision === 'APROBAR' ? 'aprobada y stock descontado' : 'denegada y orden cancelada'}.`);
+                loadSolicitudes();
+            } else {
+                const err = await response.json();
+                alert('Error al auditar receta: ' + (err.detalle || 'No se pudo completar la operación.'));
+            }
+        } catch (e) {
+            alert('Error de conexión al servidor.');
+        } finally {
+            btnAprobar.disabled = false;
+            btnDenegar.disabled = false;
+        }
+    }
+
+    document.getElementById('btn-aprobar-receta').addEventListener('click', () => enviarDecisionAuditoria('APROBAR'));
+    document.getElementById('btn-denegar-receta').addEventListener('click', () => enviarDecisionAuditoria('DENEGAR'));
+
+    // Iniciar carga
+    loadSolicitudes();
+});
+</script>
+{% endblock %}

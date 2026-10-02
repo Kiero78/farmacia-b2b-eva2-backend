@@ -1,0 +1,199 @@
+{% extends 'insumos/base.html' %}
+
+{% block title %}Catálogo de Insumos | CENABAST B2B{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0 text-dark">Vademécum de Insumos Clínicos y Fármacos</h4>
+        <p class="text-muted small mb-0">Catálogo oficial para establecimientos de salud autorizados.</p>
+    </div>
+    <span class="badge bg-primary px-3 py-2 fs-6">{{ insumos|length }} productos disponibles</span>
+</div>
+
+<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+    {% for item in insumos %}
+    <div class="col">
+        <div class="card h-100 border shadow-sm">
+            <div class="card-body d-flex flex-column justify-content-between">
+                <div>
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge badge-institucional">{{ item.categoria.nombre }}</span>
+                        <small class="text-muted font-monospace"><i class="bi bi-upc-scan"></i> {{ item.lote }}</small>
+                    </div>
+                    <h5 class="card-title fw-bold text-dark mb-1">{{ item.nombre_comercial }}</h5>
+                    <p class="text-secondary small mb-2"><strong>Principio:</strong> {{ item.principio_activo }}</p>
+                    
+                    <!-- Tipo de venta y control médico -->
+                    <div class="d-flex flex-wrap gap-1 align-items-center mb-2">
+                        {% if item.tipo_venta == 'LIBRE' %}
+                            <span class="badge bg-success-subtle text-success border border-success">
+                                <i class="bi bi-bag-check me-1"></i>Venta Libre
+                            </span>
+                        {% elif item.tipo_venta == 'RECETA_SIMPLE' %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning" title="Requiere receta médica para ser despachado">
+                                <i class="bi bi-file-earmark-medical me-1"></i>Receta Simple
+                            </span>
+                        {% elif item.tipo_venta == 'RECETA_RETENIDA' %}
+                            <span class="badge bg-danger-subtle text-danger border border-danger" title="Requiere retención y auditoría farmacéutica obligatoria">
+                                <i class="bi bi-shield-lock-fill me-1"></i>Receta Retenida
+                            </span>
+                        {% endif %}
+
+                        {% if item.es_medicamento_controlado %}
+                            <span class="badge bg-danger text-white">
+                                <i class="bi bi-exclamation-octagon-fill me-1"></i>Controlado
+                            </span>
+                        {% endif %}
+
+                        {% if item.tenant %}
+                            <span class="badge bg-light text-dark border ms-auto" title="Entidad abastecedora">
+                                <i class="bi bi-building"></i> {{ item.tenant.nombre }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="border-top pt-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+                        <span>Vencimiento:</span>
+                        <span class="fw-semibold text-dark">{{ item.fecha_vencimiento|date:"d/m/Y" }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-3 small text-muted">
+                        <span>Stock:</span>
+                        <span
+                            class="badge stock-badge {% if item.stock_cajas > 20 %}bg-primary{% else %}bg-warning text-dark{% endif %}">
+                            <span class="stock-value">{{ item.stock_cajas }}</span> cajas
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fs-5 fw-bold text-primary">${{ item.precio_unitario }}</span>
+                        <span class="badge bg-light text-secondary border auth-required-badge">Requiere Iniciar Sesión</span>
+                    </div>
+                    
+                    <!-- Controles para agregar al carro (Ocultos por defecto) -->
+                    <div class="add-to-cart-controls d-none mt-3" data-insumo-id="{{ item.id }}">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light text-muted">Cant:</span>
+                            <input type="number" class="form-control cantidad-input" value="1" min="1" max="{{ item.stock_cajas }}">
+                            <button class="btn btn-success btn-add-cart" type="button">
+                                <i class="bi bi-cart-plus"></i> Agregar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <p class="text-muted">No hay insumos clínicos cargados en el sistema.</p>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const token = localStorage.getItem('accessToken');
+    const userRol = localStorage.getItem('userRol');
+
+    const esCliente = userRol === 'USUARIO' || userRol === 'INSTITUCION';
+    const esAdmin = userRol === 'SUPERADMIN' || userRol === 'ADMIN_PAGINA' || userRol === 'GESTOR';
+
+    // Si está logueado y es cliente (USUARIO / INSTITUCION), permitimos compras
+    if (token && esCliente) {
+        
+        // 1. Ocultar los badges de "Requiere sesión"
+        document.querySelectorAll('.auth-required-badge').forEach(el => el.classList.add('d-none'));
+        
+        // 2. Mostrar los controles de añadir al carrito
+        document.querySelectorAll('.add-to-cart-controls').forEach(el => el.classList.remove('d-none'));
+
+        // 3. Manejar el click en "Agregar"
+        document.querySelectorAll('.btn-add-cart').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const container = this.closest('.add-to-cart-controls');
+                const insumoId = container.dataset.insumoId;
+                const cantidad = container.querySelector('.cantidad-input').value;
+                const originalBtnHtml = this.innerHTML;
+                
+                // Mostrar spinner de carga en el botón
+                this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+                this.disabled = true;
+
+                try {
+                    // Llamada a la API de carrito usando JWT
+                    const response = await fetch('/api/carro/items/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify({
+                            insumo: parseInt(insumoId),
+                            cantidad_cajas: parseInt(cantidad)
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.innerHTML = '<i class="bi bi-check-lg"></i> Agregado';
+                        this.classList.replace('btn-success', 'btn-outline-success');
+                        
+                        // Actualizar stock visualmente
+                        const cardBody = container.closest('.card-body');
+                        const stockValueSpan = cardBody.querySelector('.stock-value');
+                        const stockBadge = cardBody.querySelector('.stock-badge');
+                        const inputCantidad = container.querySelector('.cantidad-input');
+                        
+                        if (stockValueSpan) {
+                            let stockActual = parseInt(stockValueSpan.textContent);
+                            let nuevoStock = stockActual - parseInt(cantidad);
+                            if (nuevoStock < 0) nuevoStock = 0;
+                            
+                            stockValueSpan.textContent = nuevoStock;
+                            
+                            if (nuevoStock <= 20 && stockBadge.classList.contains('bg-primary')) {
+                                stockBadge.classList.replace('bg-primary', 'bg-warning');
+                                stockBadge.classList.add('text-dark');
+                            }
+                            
+                            inputCantidad.max = nuevoStock;
+                            if (parseInt(inputCantidad.value) > nuevoStock) {
+                                inputCantidad.value = nuevoStock;
+                            }
+                        }
+
+                        setTimeout(() => {
+                            this.innerHTML = originalBtnHtml;
+                            this.classList.replace('btn-outline-success', 'btn-success');
+                            this.disabled = false;
+                            
+                            if (stockValueSpan && parseInt(stockValueSpan.textContent) === 0) {
+                                this.disabled = true;
+                                this.innerHTML = '<i class="bi bi-x-circle"></i> Sin Stock';
+                            }
+                        }, 2000);
+                    } else {
+                        const data = await response.json();
+                        alert('Error: ' + (data.detalle || 'No se pudo agregar al carro'));
+                        this.innerHTML = originalBtnHtml;
+                        this.disabled = false;
+                    }
+                } catch (error) {
+                    alert('Error de conexión al servidor.');
+                    this.innerHTML = originalBtnHtml;
+                    this.disabled = false;
+                }
+            });
+        });
+    } else if (token && esAdmin) {
+        // Si es Admin / Superadmin / Gestor, se muestra badge de auditor
+        document.querySelectorAll('.auth-required-badge').forEach(el => {
+            el.innerHTML = '<i class="bi bi-shield-check me-1"></i>Modo Administrador';
+            el.classList.replace('bg-light', 'bg-info-subtle');
+            el.classList.replace('text-secondary', 'text-info-emphasis');
+        });
+    }
+});
+</script>
+{% endblock %}
